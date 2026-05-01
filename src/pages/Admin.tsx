@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { UserPlus, Shield, Trash2, Mail, User as UserIcon } from 'lucide-react';
+import { UserPlus, Shield, Trash2, Mail, User as UserIcon, X } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface Profile {
@@ -81,52 +81,51 @@ export default function Admin() {
     setLoading(true);
     
     try {
-      // 1. Create the user in Auth
-      // Note: This will send a verification email if configured in Supabase
+      const email = newInviteEmail.toLowerCase().trim();
+      
+      // 1. Add to pre-authorized first (this is the source of truth for role)
+      const { error: preAuthError } = await supabase
+        .from('pre_authorized_emails')
+        .upsert([{ email, role: newInviteRole }]);
+      
+      if (preAuthError) throw preAuthError;
+
+      // 2. Attempt to create the user in Auth
+      // Note: This sends an invite email.
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: newInviteEmail.toLowerCase().trim(),
-        password: 'Welcome123!', // Default password
+        email,
+        password: 'Welcome123!',
         options: {
-          data: {
-            role: newInviteRole
-          }
+          data: { role: newInviteRole }
         }
       });
 
-      if (authError) throw authError;
-
-      // 2. If user was created (or already exists in auth but not in profiles)
-      // The trigger handle_new_user should handle this, but if it doesn't:
-      if (authData.user) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert([{ 
-            id: authData.user.id, 
-            email: authData.user.email, 
-            role: newInviteRole 
-          }])
-          .select()
-          .single();
-        
-        // PGRST116 means it already exists, which is fine
-        if (profileError && profileError.code !== '23505' && profileError.code !== 'PGRST116') {
-           console.warn('Profile creation issue:', profileError);
-        }
-      }
-
-      // 3. Also add to pre-authorized just in case they sign in via Google later
-      await supabase
-        .from('pre_authorized_emails')
-        .insert([{ email: newInviteEmail.toLowerCase().trim(), role: newInviteRole }]);
+      // We ignore error 422 "User already registered" as they might just be adding them to pre-auth
+      if (authError && authError.status !== 422) throw authError;
 
       setNewInviteEmail('');
       setShowAddModal(false);
-      alert('User added successfully! Default password is Welcome123!');
+      alert(`Success! ${email} has been authorized as ${newInviteRole}.`);
       fetchData();
     } catch (err: any) {
       alert(err.message || 'Error adding user');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const deleteProfile = async (id: string) => {
+    if (!window.confirm('Are you sure you want to remove this user profile? They will no longer be able to access the system until they sign in again (if pre-authorized).')) return;
+    
+    const { error } = await supabase
+      .from('profiles')
+      .delete()
+      .eq('id', id);
+    
+    if (error) {
+      alert(error.message);
+    } else {
+      fetchData();
     }
   };
 
@@ -211,16 +210,27 @@ export default function Admin() {
                       </div>
                     </td>
                     <td className="px-8 py-4 text-right">
-                      {(currentProfile.role === 'developer' || (currentProfile.role === 'admin' && item.role !== 'developer')) && item.id !== currentProfile.id && (
-                        <select
-                          value={item.role}
-                          onChange={(e) => updateRole(item.id, e.target.value)}
-                          className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                        >
-                          <option value="admin">Admin</option>
-                          <option value="officer">Officer</option>
-                        </select>
-                      )}
+                      <div className="flex items-center justify-end gap-2">
+                        {(currentProfile.role === 'developer' || (currentProfile.role === 'admin' && item.role !== 'developer')) && item.id !== currentProfile.id && (
+                          <>
+                            <select
+                              value={item.role}
+                              onChange={(e) => updateRole(item.id, e.target.value)}
+                              className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                            >
+                              <option value="admin">Admin</option>
+                              <option value="officer">Officer</option>
+                            </select>
+                            <button
+                              onClick={() => deleteProfile(item.id)}
+                              className="p-1.5 text-slate-300 hover:text-rose-500 transition-colors"
+                              title="Remove Profile"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -345,11 +355,3 @@ export default function Admin() {
   );
 }
 
-function X({ size }: { size: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 6 6 18" />
-      <path d="m6 6 12 12" />
-    </svg>
-  );
-}

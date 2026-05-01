@@ -36,16 +36,20 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [initError, setInitError] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   // Global idle timeout (10 mins)
   useIdleTimeout();
 
   useEffect(() => {
     let mounted = true;
+    let timeoutId: number;
 
     const checkSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        
         if (!mounted) return;
 
         if (session) {
@@ -61,6 +65,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       }
     };
 
+    // Safety timeout: stop loading after 5 seconds no matter what
+    timeoutId = window.setTimeout(() => {
+      if (mounted && isLoading) {
+        console.warn('DashboardLayout: Auth check timed out. Forcing UI render.');
+        setIsLoading(false);
+      }
+    }, 5000);
+
     checkSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -69,7 +81,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       if (event === 'SIGNED_OUT' || (!session && event === 'INITIAL_SESSION')) {
         setUser(null);
         setProfile(null);
-        if (location.pathname !== '/login') navigate('/login');
+        if (location.pathname !== '/login') {
+          navigate('/login');
+        }
       } else if (session) {
         setUser(session.user);
         await syncProfile(session.user);
@@ -79,14 +93,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
     return () => {
       mounted = false;
+      window.clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
   }, [navigate]);
 
   const syncProfile = async (userData: any) => {
     try {
+      setSyncError(null);
       // Prefer "profiles" table for extra user data
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userData.id)
@@ -94,18 +110,36 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
       if (data) {
         setProfile(data);
-      } else {
-        // Fallback or attempt to create profile
+      } else if (error && error.code === 'PGRST116') {
+        // Not found, attempt to create
         const role = userData.email === 'mic1dev.me@gmail.com' ? 'developer' : 'officer';
-        const { data: newProfile } = await supabase
+        const { data: newProfile, error: insertError } = await supabase
           .from('profiles')
-          .upsert([{ id: userData.id, email: userData.email, role }])
+          .insert([{ id: userData.id, email: userData.email, role }])
           .select()
           .single();
-        if (newProfile) setProfile(newProfile);
+        
+        if (insertError) {
+          // If insert fails (maybe already exists now?), try one more select
+          const { data: retryData } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userData.id)
+            .single();
+          if (retryData) {
+            setProfile(retryData);
+          } else {
+            throw insertError;
+          }
+        } else if (newProfile) {
+          setProfile(newProfile);
+        }
+      } else if (error) {
+        throw error;
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Profile sync error:', err);
+      setSyncError(err.message || 'Failed to sync user profile. Data may not be visible.');
     }
   };
 
@@ -275,15 +309,28 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </header>
 
         <section className="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-50/50">
-          <motion.div
-            key={location.pathname}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
-            className="max-w-7xl mx-auto"
-          >
-            {children}
-          </motion.div>
+          <div className="max-w-7xl mx-auto">
+            {syncError && (
+              <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-3 text-amber-800 text-sm animate-in slide-in-from-top duration-300">
+                <AlertCircle size={20} className="text-amber-500 shrink-0" />
+                <p className="flex-1">
+                  <strong>Sync Warning:</strong> {syncError} This may affect data visibility. Try refreshing the page.
+                </p>
+                <button onClick={() => window.location.reload()} className="px-3 py-1 bg-amber-100 hover:bg-amber-200 rounded-lg font-bold transition-colors">
+                  Retry
+                </button>
+              </div>
+            )}
+            
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+            >
+              {children}
+            </motion.div>
+          </div>
         </section>
       </main>
     </div>
