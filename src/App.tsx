@@ -1,3 +1,4 @@
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import DashboardLayout from './components/layout/DashboardLayout';
 import Login from './pages/Login';
@@ -9,10 +10,22 @@ import LoanRequests from './pages/LoanRequests';
 import Reports from './pages/Reports';
 import NewLoan from './pages/NewLoan';
 import CustomerDetail from './pages/CustomerDetail';
+import { supabase } from './lib/supabase';
 
 import Admin from './pages/Admin';
 
 function App() {
+  useEffect(() => {
+    // This listens for the moment the user is verified
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        window.location.href = '/'; // Redirect to dashboard/home
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   return (
     <Router>
       <Routes>
