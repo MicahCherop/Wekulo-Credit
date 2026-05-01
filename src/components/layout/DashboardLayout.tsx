@@ -12,7 +12,8 @@ import {
   ShieldCheck,
   Menu,
   X,
-  TrendingUp
+  TrendingUp,
+  AlertCircle
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
@@ -34,34 +35,69 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [initError, setInitError] = useState<string | null>(null);
 
   // Global idle timeout (10 mins)
   useIdleTimeout();
 
   useEffect(() => {
-    const fetchSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          navigate('/login');
-        } else {
-          setUser(session.user);
-          await syncProfile(session.user);
-        }
-      } catch (error) {
-        console.error('Error fetching session:', error);
-      } finally {
+    let mounted = true;
+
+    const checkSession = async () => {
+      console.log('DashboardLayout: Checking session...');
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      if (!supabaseUrl || !supabaseKey || supabaseUrl === '' || supabaseKey === '') {
+        console.error('DashboardLayout: Supabase config is missing!');
+        setInitError('Supabase Configuration Missing. Please check your environment variables.');
         setIsLoading(false);
+        return;
+      }
+
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        
+        if (!mounted) return;
+
+        if (!session) {
+          console.log('DashboardLayout: No session, redirecting to login');
+          navigate('/login');
+          return;
+        }
+
+        console.log('DashboardLayout: Session found', session.user.email);
+        setUser(session.user);
+        await syncProfile(session.user);
+      } catch (error) {
+        console.error('DashboardLayout: Session check failed:', error);
+      } finally {
+        if (mounted) {
+          console.log('DashboardLayout: Clearing loading state');
+          setIsLoading(false);
+        }
       }
     };
 
-    fetchSession();
+    // Safety timeout
+    const timeoutId = window.setTimeout(() => {
+      if (mounted && isLoading) {
+        console.warn('DashboardLayout: Auth check timed out. Forcing UI render.');
+        setIsLoading(false);
+      }
+    }, 8000);
+
+    checkSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_OUT') {
+      console.log('DashboardLayout: Auth state change:', event, session?.user?.email);
+      if (!mounted) return;
+
+      if (event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && !session)) {
         setUser(null);
         setProfile(null);
-        navigate('/login');
+        if (location.pathname !== '/login') navigate('/login');
       } else if (session) {
         setUser(session.user);
         await syncProfile(session.user);
@@ -69,7 +105,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       setIsLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      window.clearTimeout(timeoutId);
+      subscription.unsubscribe();
+    };
   }, [navigate]);
 
   const syncProfile = async (userData: any) => {
@@ -105,8 +145,28 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate('/login');
+    console.log('DashboardLayout: Attempting logout...');
+    try {
+      // Force loading state
+      setIsLoading(true);
+      
+      // Attempt signOut with a timeout
+      const signOutPromise = supabase.auth.signOut();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Logout timeout')), 3000)
+      );
+
+      await Promise.race([signOutPromise, timeoutPromise]);
+      console.log('DashboardLayout: Logout successful');
+    } catch (err) {
+      console.error('DashboardLayout: Logout error or timeout:', err);
+      // Even if it fails, clear local state and navigate
+      setUser(null);
+      setProfile(null);
+    } finally {
+      navigate('/login');
+      setIsLoading(false);
+    }
   };
 
   const menuItems = [
@@ -119,7 +179,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   ];
 
   // Add Admin if developer/admin
-  if (profile?.role === 'developer' || profile?.role === 'admin') {
+  const isDeveloper = user?.email === 'mic1dev.me@gmail.com';
+  if (isDeveloper || profile?.role === 'developer' || profile?.role === 'admin') {
     menuItems.push({ name: 'Admin', path: '/admin', icon: ShieldCheck });
   }
 
@@ -127,8 +188,27 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-slate-50">
+      <div className="flex flex-col items-center justify-center h-screen bg-slate-50 gap-4">
         <div className="w-12 h-12 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
+        <p className="text-slate-400 text-sm font-medium animate-pulse">Initializing Security...</p>
+      </div>
+    );
+  }
+
+  if (initError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-rose-50 p-6 text-center">
+        <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center text-rose-500 mb-6">
+          <AlertCircle size={32} />
+        </div>
+        <h1 className="text-2xl font-bold text-rose-900 mb-2">Configuration Error</h1>
+        <p className="text-rose-700 mb-8 max-w-md">{initError}</p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="px-6 py-3 bg-rose-600 text-white rounded-xl font-bold hover:bg-rose-700 transition-all shadow-lg active:scale-95"
+        >
+          Check Settings & Retry
+        </button>
       </div>
     );
   }

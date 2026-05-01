@@ -320,7 +320,7 @@ export default function NewLoan() {
                     type="text"
                     value={customerData.phone}
                     onChange={e => setCustomerData({ ...customerData, phone: e.target.value })}
-                    placeholder="+1 000 000 0000"
+                    placeholder="254712345678"
                     className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-blue-200 focus:bg-white transition-all text-sm font-medium text-slate-800 placeholder:text-slate-300"
                   />
                 </div>

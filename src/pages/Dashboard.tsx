@@ -84,11 +84,11 @@ export default function Dashboard() {
           <div className="bg-white border border-white/10 rounded-2xl p-4 sm:p-6 flex flex-col md:flex-row items-center justify-between gap-4 sm:gap-6">
             <div className="flex items-center gap-3 sm:gap-5 self-start sm:self-auto">
               <div className="w-12 h-12 sm:w-16 h-16 rounded-full bg-slate-100 overflow-hidden border-2 border-slate-50 shrink-0">
-                <img src="https://i.pravatar.cc/150?u=4" alt="" className="w-full h-full object-cover" />
+                <img src="https://images.unsplash.com/photo-1522529599102-193c0d76b5b6?w=400&h=400&fit=crop" alt="Douglas Wekulo" className="w-full h-full object-cover" />
               </div>
               <div>
                 <div className="font-semibold text-sm sm:text-lg flex items-center gap-2 sm:gap-3 text-slate-800">
-                  Elena Rodriguez 
+                  Douglas Wekulo 
                   <span className="text-[10px] font-medium bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded">8th Loan</span>
                 </div>
                 <div className="text-slate-500 text-[10px] sm:text-sm mt-1">Requesting: <span className="text-slate-800 font-medium">KES 5,000</span> | Term: <span className="text-slate-800 font-medium">12 Mo</span></div>

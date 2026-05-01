@@ -185,7 +185,7 @@ export default function Leads() {
                   value={newLead.name}
                   onChange={(e) => setNewLead({ ...newLead, name: e.target.value })}
                   className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-300 transition-all text-sm"
-                  placeholder="John Doe"
+                  placeholder="Kennedy Mwachiro"
                 />
               </div>
               <div>

@@ -13,20 +13,35 @@ export default function Login() {
 
   React.useEffect(() => {
     const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        navigate('/');
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          navigate('/');
+        }
+      } catch (err: any) {
+        console.error('Auth error on login page:', err);
+        setError(err.message || 'Supabase not configured correctly.');
       }
     };
     checkUser();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-       navigate('/');
-      }
-    });
+    let authSubscription: { unsubscribe: () => void } | null = null;
+    try {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (session) {
+         navigate('/');
+        }
+      });
+      authSubscription = subscription;
+    } catch (err: any) {
+      console.error('Auth change listener error:', err);
+    }
 
-    return () => subscription.unsubscribe();
+    return () => {
+      if (authSubscription) {
+        authSubscription.unsubscribe();
+      }
+    };
   }, [navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {

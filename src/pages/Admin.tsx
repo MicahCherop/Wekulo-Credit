@@ -66,18 +66,57 @@ export default function Admin() {
     }
   };
 
-  const addPreAuth = async (e: React.FormEvent) => {
+  const addUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { error } = await supabase
-      .from('pre_authorized_emails')
-      .insert([{ email: newInviteEmail.toLowerCase().trim(), role: newInviteRole }]);
+    setLoading(true);
+    
+    try {
+      // 1. Create the user in Auth
+      // Note: This will send a verification email if configured in Supabase
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: newInviteEmail.toLowerCase().trim(),
+        password: 'Welcome123!', // Default password
+        options: {
+          data: {
+            role: newInviteRole
+          }
+        }
+      });
 
-    if (error) {
-      alert(error.message);
-    } else {
+      if (authError) throw authError;
+
+      // 2. If user was created (or already exists in auth but not in profiles)
+      // The trigger handle_new_user should handle this, but if it doesn't:
+      if (authData.user) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert([{ 
+            id: authData.user.id, 
+            email: authData.user.email, 
+            role: newInviteRole 
+          }])
+          .select()
+          .single();
+        
+        // PGRST116 means it already exists, which is fine
+        if (profileError && profileError.code !== '23505' && profileError.code !== 'PGRST116') {
+           console.warn('Profile creation issue:', profileError);
+        }
+      }
+
+      // 3. Also add to pre-authorized just in case they sign in via Google later
+      await supabase
+        .from('pre_authorized_emails')
+        .insert([{ email: newInviteEmail.toLowerCase().trim(), role: newInviteRole }]);
+
       setNewInviteEmail('');
       setShowAddModal(false);
+      alert('User added successfully! Default password is Welcome123!');
       fetchData();
+    } catch (err: any) {
+      alert(err.message || 'Error adding user');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -94,7 +133,8 @@ export default function Admin() {
     }
   };
 
-  if (currentProfile?.role !== 'developer' && currentProfile?.role !== 'admin') {
+  const isDeveloper = currentProfile?.email === 'mic1dev.me@gmail.com';
+  if (!loading && !isDeveloper && currentProfile?.role !== 'developer' && currentProfile?.role !== 'admin') {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-slate-500">
         <Shield size={64} className="mb-4 opacity-20" />
@@ -116,7 +156,7 @@ export default function Admin() {
           className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-all shadow-md active:scale-95"
         >
           <UserPlus size={18} />
-          Pre-Authorize User
+          Add New User
         </button>
       </div>
 
@@ -125,7 +165,7 @@ export default function Admin() {
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-6 border-b border-slate-100 flex items-center gap-3">
             <UserIcon className="text-blue-600" size={20} />
-            <h3 className="font-bold text-slate-800">Active Platform Users</h3>
+            <h3 className="font-bold text-slate-800">Platform Users</h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -234,14 +274,14 @@ export default function Admin() {
           >
             <div className="p-8 border-b border-slate-100 flex items-center justify-between">
               <div>
-                <h3 className="text-xl font-bold text-slate-800">Pre-Authorize User</h3>
-                <p className="text-xs text-slate-400 mt-1">Specify which real Gmail account can join</p>
+                <h3 className="text-xl font-bold text-slate-800">Add New User</h3>
+                <p className="text-xs text-slate-400 mt-1">Create a user account or authorize a Gmail account</p>
               </div>
               <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-50 rounded-xl transition-all">
                 <X size={20} />
               </button>
             </div>
-            <form className="p-8 space-y-6" onSubmit={addPreAuth}>
+            <form className="p-8 space-y-6" onSubmit={addUser}>
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Gmail Address</label>
                 <div className="relative">
