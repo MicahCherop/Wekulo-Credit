@@ -11,6 +11,24 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  React.useEffect(() => {
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        navigate('/');
+      }
+    };
+    checkUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+       navigate('/');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);

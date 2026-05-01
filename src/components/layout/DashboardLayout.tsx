@@ -33,6 +33,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const navigate = useNavigate();
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Global idle timeout (10 mins)
   useIdleTimeout();
@@ -44,31 +45,52 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         navigate('/login');
       } else {
         setUser(session.user);
-        fetchProfile(session.user.id);
+        await syncProfile(session.user);
       }
+      setIsLoading(false);
     };
 
     fetchSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!session) {
         navigate('/login');
       } else {
         setUser(session.user);
-        fetchProfile(session.user.id);
+        await syncProfile(session.user);
       }
+      setIsLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  const fetchProfile = async (userId: string) => {
-    const { data } = await supabase
+  const syncProfile = async (userData: any) => {
+    const { data, error } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', userId)
+      .eq('id', userData.id)
       .single();
-    if (data) setProfile(data);
+
+    if (data) {
+      setProfile(data);
+    } else if (error && error.code === 'PGRST116') {
+      const { data: preAuth } = await supabase
+        .from('pre_authorized_emails')
+        .select('role')
+        .eq('email', userData.email)
+        .single();
+      
+      const role = preAuth?.role || (userData.email === 'mic1dev.me@gmail.com' ? 'developer' : 'officer');
+      
+      const { data: newProfile } = await supabase
+        .from('profiles')
+        .insert([{ id: userData.id, email: userData.email, role }])
+        .select()
+        .single();
+      
+      if (newProfile) setProfile(newProfile);
+    }
   };
 
   const handleLogout = async () => {
@@ -91,6 +113,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-slate-50">
+        <div className="w-12 h-12 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-800 font-sans">

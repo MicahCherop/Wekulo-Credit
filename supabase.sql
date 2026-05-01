@@ -88,6 +88,7 @@ ALTER TABLE pre_authorized_emails ENABLE ROW LEVEL SECURITY;
 -- 8. Policies
 -- Profile Policies: Publicly readable for authenticated users (to check roles)
 CREATE POLICY "Profiles are viewable by authenticated users" ON profiles FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Users can insert their own profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "Admins can manage profiles" ON profiles FOR ALL USING (
   EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'developer'))
 );
