@@ -22,16 +22,24 @@ export default function Customers() {
 
   const fetchCustomers = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('customers')
-      .select(`
-        *,
-        loans:loans(count)
-      `)
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .select(`
+          *,
+          loans:loans(count)
+        `)
+        .order('created_at', { ascending: false });
 
-    if (data) setCustomers(data);
-    setLoading(false);
+      if (error) {
+        console.error('Error fetching customers:', error);
+      }
+      if (data) setCustomers(data);
+    } catch (err) {
+      console.error('Unexpected error fetching customers:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

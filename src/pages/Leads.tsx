@@ -28,14 +28,22 @@ export default function Leads() {
 
   const fetchLeads = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('leads')
-      .select('*')
-      .neq('status', 'converted')
-      .order('created_at', { ascending: false });
-    
-    if (data) setLeads(data);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .neq('status', 'converted')
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error('Error fetching leads:', error);
+      }
+      if (data) setLeads(data);
+    } catch (err) {
+      console.error('Unexpected error fetching leads:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleAddLead = async (e: React.FormEvent) => {

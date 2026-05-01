@@ -31,26 +31,36 @@ export default function Admin() {
 
   const fetchData = async () => {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-      setCurrentProfile(profile);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        
+        setCurrentProfile(profile);
 
-      if (profile?.role === 'developer' || profile?.role === 'admin') {
-        const [profilesRes, preAuthRes] = await Promise.all([
-          supabase.from('profiles').select('*').order('created_at', { ascending: false }),
-          supabase.from('pre_authorized_emails').select('*').order('created_at', { ascending: false })
-        ]);
+        const isDev = user.email === 'mic1dev.me@gmail.com';
+        if (isDev || profile?.role === 'developer' || profile?.role === 'admin') {
+          const [profilesRes, preAuthRes] = await Promise.all([
+            supabase.from('profiles').select('*').order('created_at', { ascending: false }),
+            supabase.from('pre_authorized_emails').select('*').order('created_at', { ascending: false })
+          ]);
 
-        setProfiles(profilesRes.data || []);
-        setPreAuths(preAuthRes.data || []);
+          if (profilesRes.error) console.error('Profiles fetch error:', profilesRes.error);
+          if (preAuthRes.error) console.error('Pre-auth fetch error:', preAuthRes.error);
+
+          setProfiles(profilesRes.data || []);
+          setPreAuths(preAuthRes.data || []);
+        }
       }
+    } catch (err) {
+      console.error('Fetch data error:', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const updateRole = async (userId: string, newRole: string) => {
