@@ -15,17 +15,6 @@ import { supabase } from './lib/supabase';
 import Admin from './pages/Admin';
 
 function App() {
-  useEffect(() => {
-    // This listens for the moment the user is verified
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        window.location.href = '/'; // Redirect to dashboard/home
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
   return (
     <Router>
       <Routes>

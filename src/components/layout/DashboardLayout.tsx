@@ -40,22 +40,29 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   useEffect(() => {
     const fetchSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        navigate('/login');
-      } else {
-        setUser(session.user);
-        await syncProfile(session.user);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          navigate('/login');
+        } else {
+          setUser(session.user);
+          await syncProfile(session.user);
+        }
+      } catch (error) {
+        console.error('Error fetching session:', error);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
     fetchSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (!session) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setProfile(null);
         navigate('/login');
-      } else {
+      } else if (session) {
         setUser(session.user);
         await syncProfile(session.user);
       }
@@ -66,30 +73,34 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   }, [navigate]);
 
   const syncProfile = async (userData: any) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userData.id)
-      .single();
-
-    if (data) {
-      setProfile(data);
-    } else if (error && error.code === 'PGRST116') {
-      const { data: preAuth } = await supabase
-        .from('pre_authorized_emails')
-        .select('role')
-        .eq('email', userData.email)
-        .single();
-      
-      const role = preAuth?.role || (userData.email === 'mic1dev.me@gmail.com' ? 'developer' : 'officer');
-      
-      const { data: newProfile } = await supabase
+    try {
+      const { data, error } = await supabase
         .from('profiles')
-        .insert([{ id: userData.id, email: userData.email, role }])
-        .select()
+        .select('*')
+        .eq('id', userData.id)
         .single();
-      
-      if (newProfile) setProfile(newProfile);
+
+      if (data) {
+        setProfile(data);
+      } else if (error && error.code === 'PGRST116') {
+        const { data: preAuth } = await supabase
+          .from('pre_authorized_emails')
+          .select('role')
+          .eq('email', userData.email)
+          .single();
+        
+        const role = preAuth?.role || (userData.email === 'mic1dev.me@gmail.com' ? 'developer' : 'officer');
+        
+        const { data: newProfile } = await supabase
+          .from('profiles')
+          .insert([{ id: userData.id, email: userData.email, role }])
+          .select()
+          .single();
+        
+        if (newProfile) setProfile(newProfile);
+      }
+    } catch (err) {
+      console.error('Error syncing profile:', err);
     }
   };
 
