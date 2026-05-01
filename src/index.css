@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Calibri", "Candara", "Segoe UI", "Optima", "Arial", sans-serif;
+  --color-slate-900: #1e293b;
+  --color-slate-800: #334155;
+  --color-slate-700: #475569;
+  --color-slate-600: #64748b;
+}
+
+@layer base {
+  body {
+    @apply text-slate-600 font-sans antialiased;
+  }
+}
