@@ -8,6 +8,7 @@ import ActiveLoans from './pages/ActiveLoans';
 import LoanRequests from './pages/LoanRequests';
 import Reports from './pages/Reports';
 import NewLoan from './pages/NewLoan';
+import CustomerDetail from './pages/CustomerDetail';
 
 import Admin from './pages/Admin';
 
@@ -38,6 +39,12 @@ function App() {
         <Route path="/customers" element={
           <DashboardLayout>
             <Customers />
+          </DashboardLayout>
+        } />
+
+        <Route path="/customers/:id" element={
+          <DashboardLayout>
+            <CustomerDetail />
           </DashboardLayout>
         } />
 

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
+import { useIdleTimeout } from '../../hooks/useIdleTimeout';
 
 interface Profile {
   id: string;
@@ -32,6 +33,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const navigate = useNavigate();
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+
+  // Global idle timeout (10 mins)
+  useIdleTimeout();
 
   useEffect(() => {
     const fetchSession = async () => {

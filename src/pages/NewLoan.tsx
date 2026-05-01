@@ -115,27 +115,52 @@ export default function NewLoan() {
 
     // 1. Create Customer
     const formattedPhone = customerData.phone.trim();
-    const { data: customer, error: cError } = await supabase
+    const customerPayload: any = {
+      name: customerData.name,
+      phone: formattedPhone,
+      email: customerData.email || '',
+      id_number: customerData.id_number,
+      address: customerData.address,
+      photo_url: previews.profile,
+      id_front_url: previews.idFront || 'https://images.unsplash.com/photo-1621252179027-94459d278660?w=400&h=250&fit=crop',
+      id_back_url: previews.idBack || 'https://images.unsplash.com/photo-1621252179027-94459d278660?w=400&h=250&fit=crop',
+      officer_id: user?.id,
+    };
+
+    if (lead?.id) {
+      customerPayload.lead_id = lead.id;
+    }
+
+    let { data: customer, error: cError } = await supabase
       .from('customers')
-      .insert([
-        {
-          name: customerData.name,
-          phone: formattedPhone,
-          email: customerData.email || '',
-          id_number: customerData.id_number,
-          address: customerData.address,
-          photo_url: previews.profile,
-          id_front_url: previews.idFront || 'https://images.unsplash.com/photo-1621252179027-94459d278660?w=400&h=250&fit=crop',
-          id_back_url: previews.idBack || 'https://images.unsplash.com/photo-1621252179027-94459d278660?w=400&h=250&fit=crop',
-          lead_id: lead?.id,
-          officer_id: user?.id,
-        },
-      ])
+      .insert([customerPayload])
       .select()
       .single();
 
     if (cError) {
+      // If it's a foreign key violation on lead_id, try inserting without it
+      if (cError.code === '23503' && cError.message.includes('lead_id')) {
+        console.warn('Lead ID was invalid or deleted, retrying without lead link...');
+        delete customerPayload.lead_id;
+        const { data: retryData, error: retryError } = await supabase
+          .from('customers')
+          .insert([customerPayload])
+          .select()
+          .single();
+        
+        customer = retryData;
+        cError = retryError;
+      }
+    }
+
+    if (cError) {
       alert('Error creating customer: ' + cError.message);
+      setLoading(false);
+      return;
+    }
+
+    if (!customer) {
+      alert('Error: Customer creation returned no data');
       setLoading(false);
       return;
     }

@@ -9,6 +9,7 @@ import {
   DollarSign,
   User
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export default function ActiveCustomers() {
   const [loans, setLoans] = useState<any[]>([]);
@@ -130,9 +131,12 @@ export default function ActiveCustomers() {
                     </div>
                   </td>
                   <td className="px-8 py-6 text-right">
-                    <button className="p-3 text-slate-300 hover:text-blue-600 rounded-xl hover:bg-white hover:shadow-md transition-all active:scale-90 border border-transparent">
+                    <Link
+                      to={`/customers/${loan.customer_id}`}
+                      className="inline-flex items-center justify-center p-3 text-slate-300 hover:text-blue-600 rounded-xl hover:bg-white hover:shadow-md transition-all active:scale-90 border border-transparent"
+                    >
                       <ExternalLink size={20} />
-                    </button>
+                    </Link>
                   </td>
                 </tr>
               ))}

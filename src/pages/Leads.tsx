@@ -31,6 +31,7 @@ export default function Leads() {
     const { data, error } = await supabase
       .from('leads')
       .select('*')
+      .neq('status', 'converted')
       .order('created_at', { ascending: false });
     
     if (data) setLeads(data);
